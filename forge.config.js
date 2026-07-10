@@ -74,7 +74,19 @@ module.exports = {
     },
     {
       name: "@electron-forge/maker-rpm",
-      config: { options: { name: "codex", productName: "Codex", genericName: "AI Coding Assistant", categories: ["Development", "Utility"], bin: "Codex", license: "Apache-2.0", homepage: "https://github.com/Haleclipse/CodexDesktop-Rebuild", icon: "./resources/electron.png" } },
+      config: {
+        options: {
+          name: "codex",
+          productName: "Codex",
+          genericName: "AI Coding Assistant",
+          categories: ["Development", "Utility"],
+          bin: "Codex",
+          license: "Apache-2.0",
+          homepage: "https://github.com/Haleclipse/CodexDesktop-Rebuild",
+          icon: "./resources/electron.png",
+          specTemplate: path.join(__dirname, "resources", "rpm-spec.ejs"),
+        },
+      },
     },
     { name: "@electron-forge/maker-zip", platforms: ["linux"] },
   ],
