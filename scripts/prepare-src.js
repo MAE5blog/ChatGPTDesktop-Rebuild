@@ -19,6 +19,7 @@ const { execSync } = require("child_process");
 
 const SRC = path.join(__dirname, "..", "src");
 const PROJECT_ROOT = path.join(__dirname, "..");
+const DEFAULT_UPSTREAM_MAIN = ".vite/build/bootstrap.js";
 
 const TARGET_TRIPLE_MAP = {
   "mac-arm64": "aarch64-apple-darwin",
@@ -48,6 +49,15 @@ function copyRecursive(src, dest, skipFiles, skipDirs) {
     else { fs.copyFileSync(s, d); count++; }
   }
   return count;
+}
+
+function normalizeUpstreamMain(value) {
+  if (typeof value !== "string") return DEFAULT_UPSTREAM_MAIN;
+  const normalized = value.trim().replace(/\\/g, "/").replace(/^\.\/+/, "");
+  if (!normalized || normalized === ".." || normalized.startsWith("../") || path.posix.isAbsolute(normalized)) {
+    return DEFAULT_UPSTREAM_MAIN;
+  }
+  return normalized;
 }
 
 /**
@@ -215,13 +225,15 @@ function main() {
 
   // 4. Sync version to root package.json
   const upstreamPkg = path.join(asarContentDir, "package.json");
+  let upstreamMain = DEFAULT_UPSTREAM_MAIN;
   if (fs.existsSync(upstreamPkg)) {
     const upstream = JSON.parse(fs.readFileSync(upstreamPkg, "utf-8"));
+    upstreamMain = normalizeUpstreamMain(upstream.main);
     const rootPkgPath = path.join(PROJECT_ROOT, "package.json");
     const rootPkg = JSON.parse(fs.readFileSync(rootPkgPath, "utf-8"));
     const oldVer = rootPkg.version;
     rootPkg.version = upstream.version || rootPkg.version;
-    rootPkg.main = "src/.vite/build/bootstrap.js";
+    rootPkg.main = path.posix.join("src", upstreamMain);
     for (const key of [
       "codexBuildNumber", "codexBuildFlavor",
       "codexSparkleFeedUrl", "codexSparklePublicKey",
@@ -232,14 +244,15 @@ function main() {
     }
     fs.writeFileSync(rootPkgPath, JSON.stringify(rootPkg, null, 2) + "\n");
     console.log(`   version: ${oldVer} -> ${rootPkg.version}`);
+    console.log(`   main: ${rootPkg.main}`);
   }
 
   // For mac/win: create stub main entry so forge validation passes.
   // The real code is in app.asar which we copy in packageAfterCopy.
   if (!isLinux) {
-    const stubDir = path.join(SRC, ".vite", "build");
-    fs.mkdirSync(stubDir, { recursive: true });
-    fs.writeFileSync(path.join(stubDir, "bootstrap.js"), "// stub - real code in app.asar\n");
+    const stubEntry = path.join(SRC, ...upstreamMain.split("/"));
+    fs.mkdirSync(path.dirname(stubEntry), { recursive: true });
+    fs.writeFileSync(stubEntry, "// stub - real code in app.asar\n");
     // Also need package.json in src/ for forge
     const asarPkg = path.join(asarContentDir, "package.json");
     if (fs.existsSync(asarPkg)) {
