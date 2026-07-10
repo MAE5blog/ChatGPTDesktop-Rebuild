@@ -132,7 +132,7 @@ jobs:
           RESULT=$(node scripts/check-update.js --json --force)
           WIN_VER=$(echo "$RESULT" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const j=JSON.parse(d);console.log(j.platforms?.Windows?.version||'')}catch{console.log('')}})")
           MAC_ARM64=$(echo "$RESULT" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const j=JSON.parse(d);console.log(j.platforms?.['macOS-arm64']?.version||'')}catch{console.log('')}})")
-          VERSION="${WIN_VER:-$MAC_ARM64}"
+          VERSION="${MAC_ARM64:-$WIN_VER}"
 
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "win_version=$WIN_VER" >> "$GITHUB_OUTPUT"
@@ -142,16 +142,12 @@ jobs:
             exit 0
           fi
 
-          node -e "
-            const fs=require('fs'), p=JSON.parse(fs.readFileSync('package.json','utf8'));
-            p.version='$VERSION';
-            fs.writeFileSync('package.json', JSON.stringify(p,null,2)+'\n');
-          "
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
           node scripts/check-update.js --save --quiet --force
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add package.json scripts/.versions.json
+          git add package.json package-lock.json scripts/.versions.json
           if ! git diff --cached --quiet; then
             git commit -m "Bump version to ${VERSION}"
             git push origin HEAD
