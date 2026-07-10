@@ -106,6 +106,16 @@ module.exports = {
     },
   ],
   hooks: {
+    preMake: async () => {
+      if (process.platform !== "linux") return;
+
+      const source = path.join(__dirname, "resources", "rpm-spec.ejs");
+      const redhatRoot = path.dirname(require.resolve("electron-installer-redhat/package.json"));
+      const target = path.join(redhatRoot, "resources", "spec.ejs");
+      fs.copyFileSync(source, target);
+      console.log(`\n-- preMake: installed mixed-architecture RPM spec template`);
+    },
+
     // Copy everything from the platform dir to the app's Resources:
     // - app.asar (repacked by prepare-src with patches applied)
     // - app.asar.unpacked/ (upstream native modules, untouched)
