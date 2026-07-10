@@ -114,7 +114,7 @@ async function checkWindowsVersion() {
   }
 
   // 从包名提取版本: OpenAI.Codex_26.325.2171.0_x64__xxx.msix
-  const pkg = packages[0];
+  const pkg = msstore.selectPackageForArchitecture(packages, "x64");
   const versionMatch = pkg.name.match(/_(\d+\.\d+\.\d+(?:\.\d+)?)_/);
   const version = versionMatch ? versionMatch[1] : "unknown";
 
