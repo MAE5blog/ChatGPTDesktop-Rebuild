@@ -1,7 +1,7 @@
 {
   "name": "codex-rebuild",
   "productName": "Codex",
-  "version": "26.707.62119",
+  "version": "26.707.72221",
   "description": "MAE5 Codex Desktop Rebuild for Windows x64 and Linux ARM64",
   "main": "src/.vite/build/bootstrap.js",
   "scripts": {
