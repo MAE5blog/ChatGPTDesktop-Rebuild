@@ -1,4 +1,4 @@
-name: Build MAE5 Targets (Manual)
+name: Build ChatGPTDesktop-Rebuild Targets (Manual)
 
 on:
   workflow_dispatch:
@@ -44,7 +44,7 @@ jobs:
         run: npm run build:win-x64
       - uses: actions/upload-artifact@v7
         with:
-          name: Codex-MAE5-Windows-x64
+          name: ChatGPTDesktop-Rebuild-Windows-x64
           path: out/*.zip
           if-no-files-found: error
 
@@ -75,7 +75,7 @@ jobs:
         run: npm run build:linux-arm64
       - uses: actions/upload-artifact@v7
         with:
-          name: Codex-MAE5-Linux-arm64
+          name: ChatGPTDesktop-Rebuild-Linux-arm64
           path: |
             out/make/deb/**/*.deb
             out/make/rpm/**/*.rpm

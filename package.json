@@ -1,8 +1,16 @@
 {
-  "name": "codex-rebuild",
+  "name": "chatgpt-desktop-rebuild",
   "productName": "Codex",
   "version": "26.707.72221",
-  "description": "MAE5 Codex Desktop Rebuild for Windows x64 and Linux ARM64",
+  "description": "MAE5 ChatGPTDesktop-Rebuild distribution for Windows x64 and Linux ARM64",
+  "homepage": "https://github.com/MAE5blog/ChatGPTDesktop-Rebuild",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/MAE5blog/ChatGPTDesktop-Rebuild.git"
+  },
+  "bugs": {
+    "url": "https://github.com/MAE5blog/ChatGPTDesktop-Rebuild/issues"
+  },
   "main": "src/.vite/build/bootstrap.js",
   "scripts": {
     "start": "node scripts/start-dev.js",

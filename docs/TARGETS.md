@@ -1,4 +1,4 @@
-# MAE5 Distribution Targets
+# ChatGPTDesktop-Rebuild Distribution Targets
 
 ## Scope
 

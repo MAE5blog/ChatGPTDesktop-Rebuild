@@ -1,6 +1,8 @@
-# Codex Desktop Rebuild - MAE5 Fork
+# ChatGPTDesktop-Rebuild
 
-This fork tracks [Haleclipse/CodexDesktop-Rebuild](https://github.com/Haleclipse/CodexDesktop-Rebuild) and maintains two production targets for our own environment.
+ChatGPTDesktop-Rebuild is the MAE5 production fork of [Haleclipse/CodexDesktop-Rebuild](https://github.com/Haleclipse/CodexDesktop-Rebuild), focused on Windows x64 and Linux ARM64.
+
+The packaged executable and user-data identifiers intentionally remain `Codex` for compatibility with existing sessions, profiles, launchers, and update tooling. The project and repository branding use `ChatGPTDesktop-Rebuild`.
 
 ## Supported Distributions
 
@@ -46,7 +48,7 @@ Manual and scheduled GitHub Actions workflows build only these two targets.
 
 ## Releases
 
-The scheduled sync workflow publishes a formal GitHub Release only after both production targets build successfully. Each release includes:
+The scheduled sync workflow publishes a formal ChatGPTDesktop-Rebuild GitHub Release only after both production targets build successfully. Each release includes:
 
 - Windows x64 and Linux ARM64 packages.
 - `SHA256SUMS.txt` for download verification.

@@ -1,4 +1,4 @@
-name: Sync OpenAI App & Release MAE5 Targets
+name: Sync OpenAI App & Release ChatGPTDesktop-Rebuild
 
 on:
   schedule:
@@ -95,7 +95,7 @@ jobs:
         run: npm run build:win-x64
       - uses: actions/upload-artifact@v7
         with:
-          name: Codex-MAE5-Windows-x64
+          name: ChatGPTDesktop-Rebuild-Windows-x64
           path: out/*.zip
           if-no-files-found: error
           retention-days: 7
@@ -127,7 +127,7 @@ jobs:
         run: npm run build:linux-arm64
       - uses: actions/upload-artifact@v7
         with:
-          name: Codex-MAE5-Linux-arm64
+          name: ChatGPTDesktop-Rebuild-Linux-arm64
           path: |
             out/make/deb/**/*.deb
             out/make/rpm/**/*.rpm
@@ -176,10 +176,10 @@ jobs:
           while true; do
             if [ "$REVISION" -eq 1 ]; then
               TAG="$BASE_TAG"
-              RELEASE_NAME="Codex MAE5 ${VERSION}"
+              RELEASE_NAME="ChatGPTDesktop-Rebuild ${VERSION}"
             else
               TAG="${BASE_TAG}-r${REVISION}"
-              RELEASE_NAME="Codex MAE5 ${VERSION} (revision ${REVISION})"
+              RELEASE_NAME="ChatGPTDesktop-Rebuild ${VERSION} (revision ${REVISION})"
             fi
 
             RELEASE_STATE=$(printf '%s' "$RELEASES_JSON" | TAG="$TAG" node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{const r=JSON.parse(d).find(x=>x.tag_name===process.env.TAG);console.log(!r?'missing':r.draft?'draft':'published')})")
@@ -226,10 +226,10 @@ jobs:
           fi
 
           if [ "$REUSE_TAG" = "true" ]; then
-            git tag -fa "$TAG" -m "Codex MAE5 ${VERSION}"
+            git tag -fa "$TAG" -m "ChatGPTDesktop-Rebuild ${VERSION}"
             git push --force origin "refs/tags/${TAG}"
           else
-            git tag -a "$TAG" -m "Codex MAE5 ${VERSION}"
+            git tag -a "$TAG" -m "ChatGPTDesktop-Rebuild ${VERSION}"
             git push origin "refs/tags/${TAG}"
           fi
 
@@ -288,7 +288,7 @@ jobs:
           tag_name: ${{ steps.release_tag.outputs.tag }}
           name: ${{ steps.release_tag.outputs.release_name }}
           body: |
-            Production release of the MAE5-focused Codex Desktop Rebuild distribution.
+            Production release of ChatGPTDesktop-Rebuild for Windows x64 and Linux ARM64.
 
             | Target | Upstream source version |
             |--------|-------------------------|

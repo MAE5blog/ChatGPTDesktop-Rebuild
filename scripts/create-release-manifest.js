@@ -40,7 +40,7 @@ function main() {
 
   const manifest = {
     schemaVersion: 1,
-    product: "Codex Desktop Rebuild - MAE5 Fork",
+    product: "ChatGPTDesktop-Rebuild",
     version: args.version,
     tag: args.tag,
     commit: args.commit,
