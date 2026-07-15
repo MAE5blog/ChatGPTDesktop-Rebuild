@@ -15,7 +15,9 @@
  */
 const fs = require("fs");
 const path = require("path");
-const { execSync } = require("child_process");
+const crypto = require("crypto");
+const os = require("os");
+const { execFileSync, execSync } = require("child_process");
 
 const SRC = path.join(__dirname, "..", "src");
 const PROJECT_ROOT = path.join(__dirname, "..");
@@ -140,6 +142,92 @@ function resolveRgVendor(platform) {
   return fs.existsSync(p) ? p : null;
 }
 
+function sha256File(filePath) {
+  return crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
+}
+
+function isLinuxElfForPlatform(filePath, platform) {
+  if (!fs.existsSync(filePath)) return false;
+  const fd = fs.openSync(filePath, "r");
+  const header = Buffer.alloc(20);
+  try {
+    if (fs.readSync(fd, header, 0, header.length, 0) !== header.length) return false;
+  } finally {
+    fs.closeSync(fd);
+  }
+
+  if (!header.subarray(0, 4).equals(Buffer.from([0x7f, 0x45, 0x4c, 0x46]))) return false;
+  if (header[4] !== 2 || header[5] !== 1) return false;
+  const expectedMachine = platform === "linux-arm64" ? 183 : 62;
+  return header.readUInt16LE(18) === expectedMachine;
+}
+
+function resolveCodeModeHost(platform) {
+  const override = process.env.CODEX_CODE_MODE_HOST_PATH;
+  if (override) {
+    const resolved = path.resolve(override);
+    if (!isLinuxElfForPlatform(resolved, platform)) {
+      throw new Error(`CODEX_CODE_MODE_HOST_PATH is not a ${platform} ELF binary: ${resolved}`);
+    }
+    return resolved;
+  }
+
+  const cometixVersion = execSync("npm view @cometix/codex version", {
+    encoding: "utf-8",
+    stdio: ["pipe", "pipe", "pipe"],
+  }).trim();
+  const versionMatch = cometixVersion.match(/^(\d+\.\d+\.\d+)/);
+  if (!versionMatch) throw new Error(`Cannot derive official Codex version from ${cometixVersion}`);
+
+  const version = versionMatch[1];
+  const triple = TARGET_TRIPLE_MAP[platform];
+  const assetName = `codex-code-mode-host-${triple}.tar.gz`;
+  const binaryName = assetName.replace(/\.tar\.gz$/, "");
+  const cacheDir = path.join(os.tmpdir(), "codex-code-mode-host", version, triple);
+  const archivePath = path.join(cacheDir, assetName);
+  const binaryPath = path.join(cacheDir, binaryName);
+  fs.mkdirSync(cacheDir, { recursive: true });
+
+  if (isLinuxElfForPlatform(binaryPath, platform)) return binaryPath;
+
+  const releaseApi = `https://api.github.com/repos/openai/codex/releases/tags/rust-v${version}`;
+  const release = JSON.parse(execFileSync("curl", [
+    "-fsSL", "--retry", "3", "--retry-delay", "2",
+    "-H", "Accept: application/vnd.github+json",
+    "-H", "X-GitHub-Api-Version: 2022-11-28",
+    releaseApi,
+  ], { encoding: "utf-8", maxBuffer: 20 * 1024 * 1024 }));
+  const asset = release.assets?.find((entry) => entry.name === assetName);
+  const expectedHash = asset?.digest?.match(/^sha256:([0-9a-f]{64})$/i)?.[1]?.toLowerCase();
+  if (!asset?.browser_download_url || !expectedHash) {
+    throw new Error(`Official release rust-v${version} is missing ${assetName} or its SHA-256 digest`);
+  }
+
+  if (!fs.existsSync(archivePath) || sha256File(archivePath) !== expectedHash) {
+    const partialPath = `${archivePath}.partial`;
+    fs.rmSync(partialPath, { force: true });
+    execFileSync("curl", [
+      "-fL", "--retry", "3", "--retry-delay", "2",
+      "-o", partialPath,
+      asset.browser_download_url,
+    ], { stdio: "inherit" });
+    const actualHash = sha256File(partialPath);
+    if (actualHash !== expectedHash) {
+      fs.rmSync(partialPath, { force: true });
+      throw new Error(`SHA-256 mismatch for ${assetName}: ${actualHash}`);
+    }
+    fs.renameSync(partialPath, archivePath);
+  }
+
+  fs.rmSync(binaryPath, { force: true });
+  execFileSync("tar", ["xzf", archivePath, "-C", cacheDir], { stdio: "pipe" });
+  if (!isLinuxElfForPlatform(binaryPath, platform)) {
+    throw new Error(`Extracted ${assetName} is not a ${platform} ELF binary`);
+  }
+  fs.chmodSync(binaryPath, 0o755);
+  return binaryPath;
+}
+
 function main() {
   const args = process.argv.slice(2);
   const platIdx = args.indexOf("--platform");
@@ -203,6 +291,12 @@ function main() {
     } else {
       console.log(`   [!] Linux rg not found in vendor, keeping upstream (will fail on Linux)`);
     }
+
+    const codeModeHost = resolveCodeModeHost(platform);
+    const codeModeHostDest = path.join(sourceDir, "codex-code-mode-host");
+    fs.copyFileSync(codeModeHost, codeModeHostDest);
+    fs.chmodSync(codeModeHostDest, 0o755);
+    console.log(`   [code-mode] replaced with official ${platform} host`);
   }
 
   // 3. For Linux: copy _asar/ content to flat src/ (forge packs ASAR from src/)

@@ -2,6 +2,24 @@ const { FuseV1Options, FuseVersion } = require("@electron/fuses");
 const path = require("path");
 const fs = require("fs");
 
+function assertLinuxElfForArch(filePath, arch) {
+  const fd = fs.openSync(filePath, "r");
+  const header = Buffer.alloc(20);
+  try {
+    if (fs.readSync(fd, header, 0, header.length, 0) !== header.length) {
+      throw new Error(`ELF header is truncated: ${filePath}`);
+    }
+  } finally {
+    fs.closeSync(fd);
+  }
+
+  const isElf = header.subarray(0, 4).equals(Buffer.from([0x7f, 0x45, 0x4c, 0x46]));
+  const expectedMachine = arch === "arm64" ? 183 : 62;
+  if (!isElf || header[4] !== 2 || header[5] !== 1 || header.readUInt16LE(18) !== expectedMachine) {
+    throw new Error(`Invalid Linux ${arch} executable: ${filePath}`);
+  }
+}
+
 module.exports = {
   packagerConfig: {
     name: "Codex",
@@ -175,6 +193,10 @@ module.exports = {
           try { fs.chmodSync(destPath, 0o755); } catch {}
           copied++;
         }
+      }
+
+      if (isLinux) {
+        assertLinuxElfForArch(path.join(resourcesPath, "codex-code-mode-host"), arch);
       }
 
       console.log(`   [ok] ${copied} files (app.asar + unpacked + resources)`);
