@@ -23,7 +23,7 @@ function sha256(filePath) {
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
-  const required = ["assets", "output", "version", "tag", "commit", "run-url"];
+  const required = ["assets", "output", "version", "tag", "commit", "run-url", "codex-cli-version"];
   for (const key of required) {
     if (!args[key]) throw new Error(`Required option missing: --${key}`);
   }
@@ -49,6 +49,10 @@ function main() {
     upstream: {
       windowsX64: args["windows-version"] || null,
       linuxArm64: args["linux-version"] || null,
+    },
+    bundledCli: {
+      version: args["codex-cli-version"] || null,
+      source: "openai/codex",
     },
     assets: files.map((name) => {
       const filePath = path.join(assetsDir, name);

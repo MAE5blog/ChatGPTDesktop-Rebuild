@@ -22,6 +22,8 @@ macOS and Linux x64 code remains available for upstream compatibility, but this 
 - Preserve Browser, Chrome extension, and Computer Use integrations.
 - Keep Windows session history compatible with the official Codex App data directory.
 - Keep Linux ARM64 window controls and Chinese input methods working.
+- Bundle a verified official Codex CLI, code-mode host, and ripgrep from one
+  release version instead of inheriting a stale third-party CLI.
 - Produce reproducible Windows x64 and Linux ARM64 release artifacts.
 
 The detailed acceptance matrix and upstream policy are in [docs/TARGETS.md](docs/TARGETS.md).
@@ -44,6 +46,10 @@ node scripts/patch-all.js mac-arm64
 npm run build:linux-arm64
 ```
 
+Builds resolve the latest stable official Codex CLI once per release. Set
+`CODEX_CLI_VERSION=0.145.0` to pin a local or manual build to a specific
+official release.
+
 Manual and scheduled GitHub Actions workflows build only these two targets.
 
 ## Releases
@@ -52,7 +58,8 @@ The scheduled sync workflow publishes a formal ChatGPTDesktop-Rebuild GitHub Rel
 
 - Windows x64 and Linux ARM64 packages.
 - `SHA256SUMS.txt` for download verification.
-- `release-manifest.json` with source versions, build commit, workflow provenance, sizes, and SHA-256 hashes.
+- `release-manifest.json` with source versions, bundled Codex CLI version,
+  build commit, workflow provenance, sizes, and SHA-256 hashes.
 - A clean `mae5-v<upstream-version>` tag. Rebuilds of an already published upstream version use `-r2`, `-r3`, and later revision tags instead of replacing a published release.
 
 Manual validation builds remain available through **Build MAE5 Targets (Manual)**. To force a production release without waiting for a new upstream version, run **Sync OpenAI App & Release MAE5 Targets** with `force` enabled.

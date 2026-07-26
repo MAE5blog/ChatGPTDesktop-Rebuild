@@ -9,6 +9,10 @@ on:
         default: "all"
         type: choice
         options: [all, windows-x64, linux-arm64]
+      codex_cli_version:
+        description: "Optional official Codex CLI version to pin (for example 0.145.0)"
+        required: false
+        type: string
 
 env:
   NODE_VERSION: "24"
@@ -17,10 +21,36 @@ permissions:
   contents: read
 
 jobs:
+  resolve-cli:
+    runs-on: ubuntu-latest
+    outputs:
+      cli_version: ${{ steps.resolve.outputs.cli_version }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - id: resolve
+        shell: bash
+        env:
+          REQUESTED_CLI_VERSION: ${{ inputs.codex_cli_version }}
+        run: |
+          set -euo pipefail
+          if [ -n "$REQUESTED_CLI_VERSION" ]; then
+            CODEX_CLI_VERSION="$REQUESTED_CLI_VERSION" node scripts/official-codex-cli.js --json > cli.json
+          else
+            node scripts/official-codex-cli.js --json > cli.json
+          fi
+          CLI_VERSION=$(node -e "const v=require('./cli.json').version; if(!v)process.exit(2); console.log(v)")
+          echo "cli_version=$CLI_VERSION" >> "$GITHUB_OUTPUT"
+
   build-windows-x64:
-    if: inputs.target == 'all' || inputs.target == 'windows-x64'
+    needs: resolve-cli
+    if: needs.resolve-cli.result == 'success' && (inputs.target == 'all' || inputs.target == 'windows-x64')
     runs-on: windows-latest
     timeout-minutes: 90
+    env:
+      CODEX_CLI_VERSION: ${{ needs.resolve-cli.outputs.cli_version }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -49,9 +79,12 @@ jobs:
           if-no-files-found: error
 
   build-linux-arm64:
-    if: inputs.target == 'all' || inputs.target == 'linux-arm64'
+    needs: resolve-cli
+    if: needs.resolve-cli.result == 'success' && (inputs.target == 'all' || inputs.target == 'linux-arm64')
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 120
+    env:
+      CODEX_CLI_VERSION: ${{ needs.resolve-cli.outputs.cli_version }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6

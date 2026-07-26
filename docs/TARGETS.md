@@ -33,7 +33,8 @@ Every release must be checked against this matrix.
 Before publishing a release:
 
 1. Build the target on its native architecture.
-2. Confirm the packaged Codex CLI starts and reports the expected version.
+2. Confirm the packaged Codex CLI starts and reports the exact official
+   version recorded in `release-manifest.json`.
 3. Run an ephemeral API smoke request without recording credentials.
 4. Verify the model and reasoning menus in the GUI.
 5. Verify plugin marketplace search and the GitHub plugin.
@@ -49,3 +50,5 @@ Before publishing a release:
 - Keep local installation directories separate from this source checkout.
 - Never commit API keys, login tokens, cookies, local profiles, or session databases.
 - Version-specific UI gates must be implemented in repository patch scripts and covered by post-build checks.
+- Do not fall back to an older third-party CLI when an official CLI asset is
+  unavailable. A build must fail rather than publish a mismatched UI and CLI.

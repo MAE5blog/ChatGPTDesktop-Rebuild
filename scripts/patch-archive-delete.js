@@ -9,7 +9,7 @@
  * The delete button calls the app-server "thread/delete" protocol via the
  * message router, which permanently removes the thread (DB + rollout file).
  *
- * Requires @cometix/codex CLI with thread/delete support.
+ * Official Codex CLI 0.145.0 and newer provides thread/delete natively.
  */
 const fs = require("fs");
 const acorn = require("acorn");

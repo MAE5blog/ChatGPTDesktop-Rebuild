@@ -28,6 +28,7 @@ jobs:
       version: ${{ steps.detect.outputs.version }}
       win_version: ${{ steps.detect.outputs.win_version }}
       linux_source_version: ${{ steps.detect.outputs.linux_source_version }}
+      cli_version: ${{ steps.detect.outputs.cli_version }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -54,11 +55,25 @@ jobs:
           MAC_ARM64=$(printf '%s' "$RESULT" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const j=JSON.parse(d);console.log(j.platforms?.['macOS-arm64']?.version||'')}catch{console.log('')}})")
           VERSION="${MAC_ARM64:-$WIN_VER}"
 
+          CLI_RESULT=$(node scripts/official-codex-cli.js --json)
+          CLI_VERSION=$(printf '%s' "$CLI_RESULT" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{console.log(JSON.parse(d).version||'')}catch{process.exit(2)}})")
+          if [ -z "$CLI_VERSION" ]; then
+            echo "Unable to resolve a verified official Codex CLI version"
+            exit 2
+          fi
+          PREVIOUS_CLI=$(node -e "const fs=require('fs');try{const v=JSON.parse(fs.readFileSync('scripts/.versions.json','utf8'));console.log(v['Codex CLI']?.version||'')}catch{}")
+          CLI_CHANGED=false
+          if [ "$CLI_VERSION" != "$PREVIOUS_CLI" ]; then
+            CLI_CHANGED=true
+          fi
+
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "win_version=$WIN_VER" >> "$GITHUB_OUTPUT"
           echo "linux_source_version=$MAC_ARM64" >> "$GITHUB_OUTPUT"
+          echo "cli_version=$CLI_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Bundled official Codex CLI: $CLI_VERSION (previous: ${PREVIOUS_CLI:-none})"
 
-          if [ "${{ inputs.force }}" = "true" ] || [ "$exit_code" -eq 0 ]; then
+          if [ "${{ inputs.force }}" = "true" ] || [ "$exit_code" -eq 0 ] || [ "$CLI_CHANGED" = "true" ]; then
             if [ -z "$VERSION" ]; then
               echo "Build requested but no release version was detected"
               exit 2
@@ -74,6 +89,8 @@ jobs:
     if: needs.check.outputs.has_update == 'true'
     runs-on: windows-latest
     timeout-minutes: 90
+    env:
+      CODEX_CLI_VERSION: ${{ needs.check.outputs.cli_version }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -105,6 +122,8 @@ jobs:
     if: needs.check.outputs.has_update == 'true'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 120
+    env:
+      CODEX_CLI_VERSION: ${{ needs.check.outputs.cli_version }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -216,6 +235,7 @@ jobs:
 
           npm version "$VERSION" --no-git-tag-version --allow-same-version
           node scripts/check-update.js --save --quiet --force
+          CODEX_CLI_VERSION="${{ needs.check.outputs.cli_version }}" node scripts/official-codex-cli.js --save --quiet
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -244,6 +264,7 @@ jobs:
           RELEASE_COMMIT: ${{ steps.metadata.outputs.commit }}
           WIN_VERSION: ${{ needs.check.outputs.win_version }}
           LINUX_VERSION: ${{ needs.check.outputs.linux_source_version }}
+          CLI_VERSION: ${{ needs.check.outputs.cli_version }}
         shell: bash
         run: |
           set -euo pipefail
@@ -272,7 +293,8 @@ jobs:
             --commit "$RELEASE_COMMIT" \
             --run-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
             --windows-version "$WIN_VERSION" \
-            --linux-version "$LINUX_VERSION"
+            --linux-version "$LINUX_VERSION" \
+            --codex-cli-version "$CLI_VERSION"
 
           (
             cd release-assets
@@ -294,6 +316,7 @@ jobs:
             |--------|-------------------------|
             | Windows x64 | `${{ needs.check.outputs.win_version || 'N/A' }}` |
             | Linux ARM64 | `${{ needs.check.outputs.linux_source_version || 'N/A' }}` |
+            | Bundled Codex CLI | `${{ needs.check.outputs.cli_version }}` |
 
             Build commit: `${{ steps.metadata.outputs.commit }}`
 
