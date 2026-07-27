@@ -12,5 +12,9 @@
   "Windows": {
     "version": "26.721.4979.0",
     "checkedAt": "2026-07-25T09:52:16.525Z"
+  },
+  "Codex CLI": {
+    "version": "0.145.0",
+    "checkedAt": "2026-07-27T11:20:52.616Z"
   }
 }
