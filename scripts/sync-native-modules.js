@@ -26,6 +26,10 @@ const ROOT_MODULES = path.join(PROJECT_ROOT, "node_modules");
 const SRC_MODULES = path.join(SRC, "node_modules");
 
 const MACOS_ONLY = new Set(["objc-js"]);
+// Modules newly required by the bundled app can be absent from the upstream
+// macOS ASAR's native-module list. Keep their runtime tree explicit so Linux
+// releases do not discover a missing dependency only after installation.
+const LINUX_RUNTIME_ROOTS = ["@parcel/watcher"];
 
 function copyRecursive(src, dest) {
   fs.mkdirSync(dest, { recursive: true });
@@ -47,6 +51,90 @@ function hasNativeFiles(dir) {
     else if (e.name.endsWith(".node")) return true;
   }
   return false;
+}
+
+function readPackageManifest(packageDir) {
+  return JSON.parse(fs.readFileSync(path.join(packageDir, "package.json"), "utf8"));
+}
+
+function findInstalledPackage(fromDir, packageName) {
+  let searchDir = fromDir;
+  while (true) {
+    const candidate = path.join(searchDir, "node_modules", packageName);
+    if (fs.existsSync(path.join(candidate, "package.json"))) return candidate;
+
+    const parent = path.dirname(searchDir);
+    if (parent === searchDir) return null;
+    searchDir = parent;
+  }
+}
+
+function destinationForPackage(packageDir) {
+  const relative = path.relative(ROOT_MODULES, packageDir);
+  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error(`Runtime package is outside project node_modules: ${packageDir}`);
+  }
+  return path.join(SRC_MODULES, relative);
+}
+
+function shouldCopyOptionalDependency(packageName, platform) {
+  if (!packageName.startsWith("@parcel/watcher-")) return true;
+
+  const arch = platform === "linux-arm64" ? "arm64" : "x64";
+  return packageName.startsWith(`@parcel/watcher-linux-${arch}-`);
+}
+
+function syncRuntimeDependencyTree(rootName, platform) {
+  const copied = new Set();
+  const watcherBindings = [];
+  let totalCopied = 0;
+
+  function copyPackage(packageDir) {
+    const source = fs.realpathSync(packageDir);
+    if (copied.has(source)) return;
+    copied.add(source);
+
+    const manifest = readPackageManifest(source);
+    const destination = destinationForPackage(source);
+    fs.rmSync(destination, { recursive: true, force: true });
+    const count = copyRecursive(source, destination);
+    totalCopied += count;
+    console.log(`   [runtime] ${manifest.name} (${count} files)`);
+
+    if (manifest.name.startsWith("@parcel/watcher-linux-")) {
+      watcherBindings.push(manifest.name);
+    }
+
+    const required = Object.keys(manifest.dependencies || {});
+    const optional = Object.keys(manifest.optionalDependencies || {});
+    for (const packageName of [...required, ...optional]) {
+      const isOptional = optional.includes(packageName);
+      if (isOptional && !shouldCopyOptionalDependency(packageName, platform)) continue;
+
+      const dependencyDir = findInstalledPackage(source, packageName);
+      if (!dependencyDir) {
+        if (isOptional) {
+          console.log(`   [runtime skip] optional ${packageName} (not installed)`);
+          continue;
+        }
+        throw new Error(`Missing runtime dependency ${packageName} required by ${manifest.name}`);
+      }
+      copyPackage(dependencyDir);
+    }
+  }
+
+  const rootDir = findInstalledPackage(PROJECT_ROOT, rootName);
+  if (!rootDir) {
+    throw new Error(`Missing required Linux runtime package: ${rootName}`);
+  }
+  copyPackage(rootDir);
+
+  const arch = platform === "linux-arm64" ? "arm64" : "x64";
+  if (!watcherBindings.some((name) => name.startsWith(`@parcel/watcher-linux-${arch}-`))) {
+    throw new Error(`Missing @parcel/watcher Linux ${arch} native binding after npm install`);
+  }
+
+  return totalCopied;
 }
 
 function main() {
@@ -112,6 +200,12 @@ function main() {
     const count = copyRecursive(source, destDir);
     totalCopied += count;
     console.log(`   [${sourceLabel}] ${mod} (${count} files)`);
+  }
+
+  if (isLinux) {
+    for (const rootName of LINUX_RUNTIME_ROOTS) {
+      totalCopied += syncRuntimeDependencyTree(rootName, platform);
+    }
   }
 
   console.log(`   [ok] ${totalCopied} files total in src/node_modules/`);

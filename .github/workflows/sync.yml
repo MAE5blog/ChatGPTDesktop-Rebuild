@@ -144,6 +144,13 @@ jobs:
         run: node scripts/patch-all.js mac-arm64
       - name: Build Linux ARM64 natively
         run: npm run build:linux-arm64
+      - name: Verify Linux ARM64 runtime package
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t artifacts < <(find out/make/zip -type f -name '*.zip' | sort)
+          [ "${#artifacts[@]}" -eq 1 ]
+          node scripts/verify-linux-runtime-package.js --artifact "${artifacts[0]}" --smoke
       - uses: actions/upload-artifact@v7
         with:
           name: ChatGPTDesktop-Rebuild-Linux-arm64

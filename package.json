@@ -52,6 +52,7 @@
     "fast-xml-parser": "^5.5.9"
   },
   "dependencies": {
+    "@parcel/watcher": "2.6.0",
     "@sentry/electron": "^7.5.0",
     "@sentry/node": "10.29.0",
     "better-sqlite3": "12.11.1",
