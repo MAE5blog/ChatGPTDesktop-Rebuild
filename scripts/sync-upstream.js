@@ -227,9 +227,39 @@ async function syncWin(destDir) {
 
 // ─── Assemble output ────────────────────────────────────────────
 
+// Windows Store MSIX packages can percent-encode npm scope directories
+// (%40scope) while app.asar references the literal @scope path; normalize
+// before extracting so unpacked native modules resolve.
+function normalizeEncodedDirectories(rootDir) {
+  const stack = [rootDir];
+  while (stack.length > 0) {
+    const dir = stack.pop();
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const full = path.join(dir, entry.name);
+      stack.push(full);
+      if (!entry.name.includes("%")) continue;
+      const decoded = entry.name
+        .replace(/%40/gi, "@")
+        .replace(/%2B/gi, "+")
+        .replace(/%20/g, " ");
+      if (decoded === entry.name) continue;
+      const target = path.join(dir, decoded);
+      if (!fs.existsSync(target)) fs.renameSync(full, target);
+    }
+  }
+}
+
 function assembleOutput(resourcesDir, destDir, label) {
   const asarPath = path.join(resourcesDir, "app.asar");
   if (!fs.existsSync(asarPath)) throw new Error(`${label}: app.asar not found`);
+  normalizeEncodedDirectories(resourcesDir);
 
   console.log(`   [assemble] -> ${path.relative(PROJECT_ROOT, destDir)}/`);
   clearDir(destDir);
