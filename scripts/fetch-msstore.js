@@ -346,18 +346,13 @@ async function getFileList(cookie, categoryId, ring) {
   return updates;
 }
 
-function selectPackageForArchitecture(packages, architecture) {
+function selectPackagesForArchitecture(packages, architecture) {
   const marker = `_${String(architecture).toLowerCase()}__`;
   const candidates = packages.filter((pkg) =>
     typeof pkg.name === "string" &&
     pkg.name.toLowerCase().includes(marker) &&
     pkg.name.toLowerCase().endsWith(".msix")
   );
-
-  if (candidates.length === 0) {
-    const available = packages.map((pkg) => pkg.name).filter(Boolean).join(", ");
-    throw new Error(`未找到 ${architecture} MSIX 包。可用包: ${available || "无"}`);
-  }
 
   const versionParts = (pkg) => {
     const match = pkg.name.match(/_(\d+(?:\.\d+)+)_/);
@@ -372,7 +367,16 @@ function selectPackageForArchitecture(packages, architecture) {
       if (diff !== 0) return diff;
     }
     return a.name.localeCompare(b.name);
-  })[0];
+  });
+}
+
+function selectPackageForArchitecture(packages, architecture) {
+  const candidates = selectPackagesForArchitecture(packages, architecture);
+  if (candidates.length === 0) {
+    const available = packages.map((pkg) => pkg.name).filter(Boolean).join(", ");
+    throw new Error(`未找到 ${architecture} MSIX 包。可用包: ${available || "无"}`);
+  }
+  return candidates[0];
 }
 
 async function getDownloadUrl(updateID, revisionNumber, ring, digest) {
@@ -643,7 +647,7 @@ async function main() {
 }
 
 // 支持作为模块导入
-module.exports = { getCookie, getAppInfo, getFileList, getDownloadUrl, selectPackageForArchitecture };
+module.exports = { getCookie, getAppInfo, getFileList, getDownloadUrl, selectPackageForArchitecture, selectPackagesForArchitecture };
 
 // CLI 直接运行
 if (require.main === module) {

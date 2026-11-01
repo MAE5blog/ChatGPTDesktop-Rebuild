@@ -145,10 +145,23 @@ async function getWindowsVersion() {
   if (!info.categoryId) throw new Error("No CategoryID");
   const pkgs = await msstore.getFileList(cookie, info.categoryId, "Retail");
   if (pkgs.length === 0) throw new Error("No packages");
-  const pkg = msstore.selectPackageForArchitecture(pkgs, "x64");
-  const url = await msstore.getDownloadUrl(pkg.updateID, pkg.revisionNumber, "Retail", pkg.digest);
-  const verMatch = pkg.name.match(/_(\d+\.\d+\.\d+(?:\.\d+)?)_/);
-  return { version: verMatch?.[1] || "unknown", url, packageName: pkg.name };
+  // Microsoft Store can list a newer staged package before its payload is
+  // downloadable; try newest first and fall back to the next candidate.
+  const candidates = msstore.selectPackagesForArchitecture(pkgs, "x64");
+  if (candidates.length === 0) throw new Error("No x64 MSIX packages");
+  for (const pkg of candidates) {
+    const url = await msstore.getDownloadUrl(pkg.updateID, pkg.revisionNumber, "Retail", pkg.digest);
+    const verMatch = pkg.name.match(/_(\d+\.\d+\.\d+(?:\.\d+)?)_/);
+    const version = verMatch?.[1] || "unknown";
+    if (url) {
+      if (candidates[0] !== pkg) {
+        console.log(`   [i] ${candidates[0].name} is not downloadable yet; using ${version}`);
+      }
+      return { version, url, packageName: pkg.name };
+    }
+    console.error(`   [!] no download URL for ${pkg.name}; trying next`);
+  }
+  throw new Error("No downloadable x64 MSIX found (store rollout may be in progress)");
 }
 
 // ─── Extract macOS ──────────────────────────────────────────────
@@ -270,6 +283,7 @@ async function main() {
   fs.mkdirSync(TEMP_DIR, { recursive: true });
 
   const results = {};
+  const failures = [];
 
   // Detect versions
   if (!SKIP_MAC) {
@@ -313,7 +327,11 @@ async function main() {
   if (!SKIP_WIN && results.win) {
     try {
       results.win = await syncWin(path.join(SRC_DIR, "win"));
-    } catch (e) { console.error(`   [x] win: ${e.message}`); }
+    } catch (e) { console.error(`   [x] win: ${e.message}`); failures.push("win"); }
+  }
+
+  if (failures.length > 0) {
+    throw new Error(`Upstream sync failed for: ${failures.join(", ")}`);
   }
 
   const saved = loadVersions();

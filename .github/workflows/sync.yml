@@ -27,7 +27,6 @@ jobs:
       has_update: ${{ steps.detect.outputs.has_update }}
       version: ${{ steps.detect.outputs.version }}
       win_version: ${{ steps.detect.outputs.win_version }}
-      linux_source_version: ${{ steps.detect.outputs.linux_source_version }}
       cli_version: ${{ steps.detect.outputs.cli_version }}
     steps:
       - uses: actions/checkout@v6
@@ -52,8 +51,7 @@ jobs:
           fi
 
           WIN_VER=$(printf '%s' "$RESULT" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const j=JSON.parse(d);console.log(j.platforms?.Windows?.version||'')}catch{console.log('')}})")
-          MAC_ARM64=$(printf '%s' "$RESULT" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const j=JSON.parse(d);console.log(j.platforms?.['macOS-arm64']?.version||'')}catch{console.log('')}})")
-          VERSION="${MAC_ARM64:-$WIN_VER}"
+          VERSION="$WIN_VER"
 
           CLI_RESULT=$(node scripts/official-codex-cli.js --json)
           CLI_VERSION=$(printf '%s' "$CLI_RESULT" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{console.log(JSON.parse(d).version||'')}catch{process.exit(2)}})")
@@ -69,7 +67,6 @@ jobs:
 
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "win_version=$WIN_VER" >> "$GITHUB_OUTPUT"
-          echo "linux_source_version=$MAC_ARM64" >> "$GITHUB_OUTPUT"
           echo "cli_version=$CLI_VERSION" >> "$GITHUB_OUTPUT"
           echo "Bundled official Codex CLI: $CLI_VERSION (previous: ${PREVIOUS_CLI:-none})"
 
@@ -117,57 +114,12 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  build-linux-arm64:
-    needs: check
-    if: needs.check.outputs.has_update == 'true'
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 120
-    env:
-      CODEX_CLI_VERSION: ${{ needs.check.outputs.cli_version }}
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y rpm fakeroot dpkg 7zip
-          if ! command -v 7zz >/dev/null 2>&1 && command -v 7z >/dev/null 2>&1; then
-            sudo ln -sf "$(command -v 7z)" /usr/local/bin/7zz
-          fi
-      - run: npm ci
-      - name: Sync macOS ARM64 upstream package for Linux
-        run: node scripts/sync-upstream.js --force --skip-win
-      - name: Apply ARM64 source patches
-        run: node scripts/patch-all.js mac-arm64
-      - name: Build Linux ARM64 natively
-        run: npm run build:linux-arm64
-      - name: Verify Linux ARM64 runtime package
-        shell: bash
-        run: |
-          set -euo pipefail
-          mapfile -t artifacts < <(find out/make/zip -type f -name '*.zip' | sort)
-          [ "${#artifacts[@]}" -eq 1 ]
-          node scripts/verify-linux-runtime-package.js --artifact "${artifacts[0]}" --smoke
-      - uses: actions/upload-artifact@v7
-        with:
-          name: ChatGPTDesktop-Rebuild-Linux-arm64
-          path: |
-            out/make/deb/**/*.deb
-            out/make/rpm/**/*.rpm
-            out/make/zip/**/*.zip
-          if-no-files-found: error
-          retention-days: 7
-
   release:
-    needs: [check, build-windows-x64, build-linux-arm64]
+    needs: [check, build-windows-x64]
     if: >-
       always() &&
       needs.check.result == 'success' &&
-      needs.build-windows-x64.result == 'success' &&
-      needs.build-linux-arm64.result == 'success'
+      needs.build-windows-x64.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -270,7 +222,6 @@ jobs:
           TAG: ${{ steps.release_tag.outputs.tag }}
           RELEASE_COMMIT: ${{ steps.metadata.outputs.commit }}
           WIN_VERSION: ${{ needs.check.outputs.win_version }}
-          LINUX_VERSION: ${{ needs.check.outputs.linux_source_version }}
           CLI_VERSION: ${{ needs.check.outputs.cli_version }}
         shell: bash
         run: |
@@ -300,7 +251,6 @@ jobs:
             --commit "$RELEASE_COMMIT" \
             --run-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
             --windows-version "$WIN_VERSION" \
-            --linux-version "$LINUX_VERSION" \
             --codex-cli-version "$CLI_VERSION"
 
           (
@@ -317,12 +267,11 @@ jobs:
           tag_name: ${{ steps.release_tag.outputs.tag }}
           name: ${{ steps.release_tag.outputs.release_name }}
           body: |
-            Production release of ChatGPTDesktop-Rebuild for Windows x64 and Linux ARM64.
+            Production release of ChatGPTDesktop-Rebuild for Windows x64.
 
             | Target | Upstream source version |
             |--------|-------------------------|
             | Windows x64 | `${{ needs.check.outputs.win_version || 'N/A' }}` |
-            | Linux ARM64 | `${{ needs.check.outputs.linux_source_version || 'N/A' }}` |
             | Bundled Codex CLI | `${{ needs.check.outputs.cli_version }}` |
 
             Build commit: `${{ steps.metadata.outputs.commit }}`

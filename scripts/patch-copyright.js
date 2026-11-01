@@ -11,7 +11,7 @@
 const fs = require("fs");
 const path = require("path");
 const { parse } = require("acorn");
-const { locateBundles, relPath } = require("./patch-util");
+const { locateBundles, locateBundlesByContent, relPath } = require("./patch-util");
 
 // ──────────────────────────────────────────────
 //  Config
@@ -42,6 +42,31 @@ function walk(node, visitor) {
 // ──────────────────────────────────────────────
 //  Patch rule
 // ──────────────────────────────────────────────
+
+// 26.1027+ renders the About panel from an HTML template literal instead of
+// Electron's setAboutPanelOptions({ copyright }).
+const HTML_COPYRIGHT_VARIANTS = [
+  [
+    '<div class="copyright">\\xa9 OpenAI</div>',
+    '<div class="copyright">\\xa9 OpenAI \\xb7 Cometix Space</div>',
+  ],
+  [
+    '<div class="copyright">© OpenAI</div>',
+    '<div class="copyright">© OpenAI · Cometix Space</div>',
+  ],
+];
+
+function collectHtmlPatches(source) {
+  const patches = [];
+  for (const [find, replace] of HTML_COPYRIGHT_VARIANTS) {
+    let idx = 0;
+    while ((idx = source.indexOf(find, idx)) >= 0) {
+      patches.push({ start: idx, end: idx + find.length, original: find, replacement: replace });
+      idx += find.length;
+    }
+  }
+  return patches;
+}
 
 function collectPatches(ast, source) {
   const patches = [];
@@ -96,15 +121,26 @@ function main() {
   const isCheck = args.includes("--check");
   const platform = args.find((a) => ["mac-arm64", "mac-x64", "win"].includes(a));
 
-  const bundles = locateBundles({
+  let bundles = locateBundles({
     dir: "build",
     pattern: /^main(-[^.]+)?\.js$/,
     platform,
   });
 
   if (bundles.length === 0) {
-    console.error("[x] No main bundle found");
-    process.exit(1);
+    bundles = locateBundlesByContent({
+      dir: "build",
+      needles: ['class="copyright"'],
+      platform,
+    });
+    if (bundles.length > 0) {
+      console.log("   [i] main bundle renamed upstream; located by content");
+    }
+  }
+
+  if (bundles.length === 0) {
+    console.warn("[!] No copyright target bundle found; skipping");
+    return;
   }
 
   for (const bundle of bundles) {
@@ -117,10 +153,11 @@ function main() {
     console.log(`   parse: ${Date.now() - t0}ms`);
 
     const patches = collectPatches(ast, source);
+    patches.push(...collectHtmlPatches(source));
 
     if (patches.length === 0) {
       // Check if already patched
-      if (source.includes(NEW_COPYRIGHT)) {
+      if (source.includes(NEW_COPYRIGHT) || source.includes("Cometix Space")) {
         console.log("   [ok] Already patched");
       } else {
         console.log("   [!] No copyright property matched");

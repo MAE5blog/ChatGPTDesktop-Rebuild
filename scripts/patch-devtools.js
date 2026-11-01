@@ -14,7 +14,7 @@
 const fs = require("fs");
 const path = require("path");
 const { parse } = require("acorn");
-const { locateBundles, relPath } = require("./patch-util");
+const { locateBundles, locateBundlesByContent, relPath } = require("./patch-util");
 
 // ──────────────────────────────────────────────
 //  AST walker
@@ -85,15 +85,26 @@ function main() {
   const isCheck = args.includes("--check");
   const platform = args.find((a) => ["mac-arm64", "mac-x64", "win"].includes(a));
 
-  const bundles = locateBundles({
+  let bundles = locateBundles({
     dir: "build",
     pattern: /^main(-[^.]+)?\.js$/,
     platform,
   });
 
   if (bundles.length === 0) {
-    console.error("[x] No main bundle found");
-    process.exit(1);
+    bundles = locateBundlesByContent({
+      dir: "build",
+      needles: ["allowInspectElement"],
+      platform,
+    });
+    if (bundles.length > 0) {
+      console.log("   [i] main bundle renamed upstream; located by content");
+    }
+  }
+
+  if (bundles.length === 0) {
+    console.warn("[!] No DevTools target bundle found; skipping");
+    return;
   }
 
   for (const bundle of bundles) {

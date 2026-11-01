@@ -76,10 +76,62 @@ function locateBundles({ dir, pattern, platform }) {
 }
 
 /**
+ * Locate bundles by scanning file contents (fallback for upstream layout changes).
+ *
+ * @param {object} opts
+ * @param {"build"|"assets"} opts.dir
+ * @param {string[]} opts.needles - All substrings must appear in the file
+ * @param {string} [opts.platform]
+ * @returns {Array<{platform: string, path: string}>}
+ */
+function locateBundlesByContent({ dir, needles, platform }) {
+  const dirMap = {
+    build: (plat) => path.join(SRC_DIR, plat, "_asar", ".vite", "build"),
+    assets: (plat) => path.join(SRC_DIR, plat, "_asar", "webview", "assets"),
+  };
+  const legacyMap = {
+    build: path.join(SRC_DIR, ".vite", "build"),
+    assets: path.join(SRC_DIR, "webview", "assets"),
+  };
+  const getDir = dirMap[dir];
+  if (!getDir) throw new Error(`Unknown dir type: ${dir}`);
+
+  const ALL_PLATFORMS = ["mac-arm64", "mac-x64", "win"];
+  const platforms = platform
+    ? [platform]
+    : ALL_PLATFORMS.filter((p) => fs.existsSync(getDir(p)));
+
+  const roots =
+    platforms.length > 0
+      ? platforms.map((plat) => ({ platform: plat, dir: getDir(plat) }))
+      : [{ platform: "legacy", dir: legacyMap[dir] }];
+
+  const needlesBuf = needles.map((n) => Buffer.from(n, "utf-8"));
+  const results = [];
+  for (const root of roots) {
+    if (!fs.existsSync(root.dir)) continue;
+    for (const name of fs.readdirSync(root.dir)) {
+      if (!name.endsWith(".js")) continue;
+      const file = path.join(root.dir, name);
+      let content;
+      try {
+        content = fs.readFileSync(file);
+      } catch {
+        continue;
+      }
+      if (needlesBuf.every((n) => content.includes(n))) {
+        results.push({ platform: root.platform, path: file });
+      }
+    }
+  }
+  return results;
+}
+
+/**
  * Return path relative to project root.
  */
 function relPath(absPath) {
   return path.relative(PROJECT_ROOT, absPath);
 }
 
-module.exports = { locateBundles, relPath, SRC_DIR, PROJECT_ROOT };
+module.exports = { locateBundles, locateBundlesByContent, relPath, SRC_DIR, PROJECT_ROOT };
