@@ -242,16 +242,19 @@ function normalizeEncodedDirectories(rootDir) {
     }
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
-      const full = path.join(dir, entry.name);
-      stack.push(full);
-      if (!entry.name.includes("%")) continue;
-      const decoded = entry.name
-        .replace(/%40/gi, "@")
-        .replace(/%2B/gi, "+")
-        .replace(/%20/g, " ");
-      if (decoded === entry.name) continue;
-      const target = path.join(dir, decoded);
-      if (!fs.existsSync(target)) fs.renameSync(full, target);
+      let current = path.join(dir, entry.name);
+      if (entry.name.includes("%")) {
+        const decoded = entry.name
+          .replace(/%40/gi, "@")
+          .replace(/%2B/gi, "+")
+          .replace(/%20/g, " ");
+        if (decoded !== entry.name) {
+          const target = path.join(dir, decoded);
+          if (!fs.existsSync(target)) fs.renameSync(current, target);
+          current = target;
+        }
+      }
+      stack.push(current);
     }
   }
 }
